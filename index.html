@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lightning Speed Couriers — Book a Pickup</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDoSc-yy9nk3Tcm2a-EqxfXpPUyDrp0I3k&libraries=places&callback=initAutocomplete" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #ffffff;
+    --paper: rgba(10,8,20,0.72);
+    --muted: #c8c4be;
+    --accent: #FF6A00;
+    --accent-light: rgba(255,106,0,0.18);
+    --border: rgba(255,255,255,0.13);
+    --white: #ffffff;
+    --success: #4ade80;
+    --radius: 4px;
+    --card-bg: rgba(12,10,24,0.82);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 15px;
+    position: relative;
+  }
+
+  /* FULL PAGE BACKGROUND - real element for maximum compatibility */
+  #page-bg {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: -2;
+    background-image: url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1800&q=80&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+  }
+  #page-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: -1;
+    background: linear-gradient(
+      135deg,
+      rgba(5,3,15,0.88) 0%,
+      rgba(20,8,4,0.82) 50%,
+      rgba(5,3,15,0.88) 100%
+    );
+  }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,5,18,0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 80px;
+  }
+  .logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px; letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--accent); }
+  nav ul { list-style: none; display: flex; gap: 32px; }
+  nav a { text-decoration: none; color: rgba(255,255,255,0.65); font-size: 14px; font-weight: 400; transition: color .2s; }
+  nav a:hover { color: var(--white); }
+  .nav-cta {
+    background: var(--accent); color: var(--white) !important;
+    padding: 8px 18px; border-radius: var(--radius);
+    font-weight: 500 !important;
+  }
+  .nav-cta:hover { background: #e05500 !important; }
+
+  /* HAMBURGER */
+  .hamburger {
+    display: flex; flex-direction: column; justify-content: center; gap: 5px;
+    width: 40px; height: 40px; cursor: pointer; background: none; border: 1.5px solid var(--border);
+    padding: 8px; border-radius: var(--radius); transition: background .2s, border-color .2s;
+    flex-shrink: 0;
+  }
+  .hamburger:hover { background: var(--accent-light); border-color: var(--accent); }
+  .hamburger span {
+    display: block; height: 2px; background: var(--ink); border-radius: 2px;
+    transition: all .3s ease; transform-origin: center;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  /* DROPDOWN MENU */
+  .nav-drawer {
+    position: fixed; top: 80px; left: 0; right: 0;
+    background: rgba(8,5,18,0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    border-top: 2px solid var(--accent);
+    transform: translateY(-10px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform .3s cubic-bezier(.4,0,.2,1), opacity .3s ease;
+  }
+  .nav-drawer.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+  .drawer-header { display: none; }
+  .drawer-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .drawer-nav a {
+    display: flex; align-items: center; gap: 12px;
+    padding: 20px 28px; text-decoration: none; color: rgba(255,255,255,0.8);
+    font-size: 15px; font-weight: 400;
+    transition: background .15s, color .15s;
+    border-right: 1px solid var(--border);
+  }
+  .drawer-nav a:last-child { border-right: none; }
+  .drawer-nav a:hover { background: var(--accent-light); color: var(--accent); }
+  .drawer-icon { font-size: 20px; flex-shrink: 0; }
+  .drawer-footer {
+    border-top: 1px solid var(--border);
+    padding: 16px 28px;
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex; justify-content: flex-end;
+  }
+  .drawer-cta {
+    display: inline-block; text-decoration: none;
+    background: var(--accent); color: var(--white) !important;
+    padding: 10px 24px; border-radius: var(--radius);
+    font-weight: 500; font-size: 14px;
+    transition: background .2s;
+  }
+  .drawer-cta:hover { background: #e05500 !important; }
+
+  /* OVERLAY */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.2);
+    z-index: 199; opacity: 0; pointer-events: none; transition: opacity .3s;
+  }
+  .drawer-overlay.open { opacity: 1; pointer-events: all; }
+
+  /* HERO */
+  .hero {
+    padding: 80px 40px 60px;
+    display: grid; grid-template-columns: 1fr 220px 1fr; gap: 48px; align-items: center;
+    max-width: 1200px; margin: 0 auto;
+  }
+  .hero-text h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(36px, 5vw, 58px);
+    line-height: 1.05; letter-spacing: -1px;
+    margin-bottom: 20px;
+  }
+  .hero-text h1 em { color: var(--accent); font-style: italic; }
+  .hero-text p { color: var(--muted); line-height: 1.7; max-width: 400px; margin-bottom: 32px; }
+  .stats { display: flex; gap: 40px; }
+  .stat-num { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--ink); }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+  /* RUNNER */
+  .hero-runner {
+    display: flex; align-items: flex-end; justify-content: center;
+    align-self: stretch; position: relative;
+  }
+  .hero-runner svg {
+    width: 200px; height: auto;
+    animation: runBounce 0.65s ease-in-out infinite alternate;
+    filter: drop-shadow(4px 10px 14px rgba(255,106,0,0.3));
+  }
+  @keyframes runBounce {
+    from { transform: translateY(0) rotate(-1.5deg); }
+    to   { transform: translateY(-14px) rotate(1.5deg); }
+  }
+
+  /* GOOGLE AUTOCOMPLETE */
+  .pac-container {
+    background: #120a20 !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    border-radius: 6px !important;
+    margin-top: 4px;
+    font-family: 'DM Sans', sans-serif !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+  }
+  .pac-item {
+    padding: 10px 14px !important;
+    color: rgba(255,255,255,0.8) !important;
+    font-size: 13px !important;
+    cursor: pointer;
+    border-top: 1px solid rgba(255,255,255,0.07) !important;
+    background: transparent !important;
+  }
+  .pac-item:hover { background: rgba(255,106,0,0.15) !important; color: white !important; }
+  .pac-item-query { color: white !important; font-weight: 500; }
+  .pac-matched { color: #FF6A00 !important; }
+  .pac-icon { display: none !important; }
+  .pac-logo::after { display: none !important; }
+
+  /* BOOKING FORM */
+  .booking-card {
+    background: rgba(12,8,24,0.88);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 36px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,106,0,0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* STEPS */
+  .steps {
+    display: flex; gap: 0; margin-bottom: 32px; border-bottom: 1px solid var(--border); padding-bottom: 20px;
+  }
+  .step {
+    display: flex; align-items: center; gap: 8px; flex: 1;
+    font-size: 13px; color: var(--muted); cursor: pointer; position: relative;
+    padding-bottom: 16px; margin-bottom: -21px;
+    transition: color .2s;
+  }
+  .step.active { color: var(--ink); font-weight: 500; }
+  .step.active::after {
+    content: '';
+    position: absolute; bottom: -1px; left: 0; right: 0; height: 2px;
+    background: var(--accent);
+  }
+  .step.done { color: var(--success); }
+  .step-num {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1.5px solid currentColor;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 500; flex-shrink: 0;
+  }
+  .step.done .step-num { background: var(--success); border-color: var(--success); color: white; }
+  .step.done .step-num::before { content: '✓'; }
+  .step.done .step-label { display: none; }
+
+  /* PANELS */
+  .panel { display: none; animation: fadeIn .3s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+
+  .panel-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px; margin-bottom: 4px;
+  }
+  .panel-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+
+  /* FORM FIELDS */
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 10px 14px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif; font-size: 14px; color: var(--white);
+    background: rgba(255,255,255,0.07); outline: none;
+    transition: border-color .2s, background .2s;
+    appearance: none;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--accent); background: rgba(255,255,255,0.1);
+  }
+  .field input::placeholder, .field textarea::placeholder { color: rgba(255,255,255,0.35); }
+  .field select option { background: #120a20; color: white; }
+  .field textarea { resize: none; height: 72px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-icon { position: relative; }
+  .field-icon input { padding-left: 38px; }
+  .field-icon .icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 15px; pointer-events: none;
+  }
+
+  /* ADDRESS BLOCK */
+  .route-visual {
+    display: flex; flex-direction: column; gap: 0; margin-bottom: 16px;
+  }
+  .route-stop { display: flex; gap: 12px; align-items: flex-start; }
+  .route-line {
+    display: flex; flex-direction: column; align-items: center; gap: 0; padding-top: 11px;
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid var(--accent); background: var(--white); flex-shrink: 0;
+  }
+  .dot.filled { background: var(--accent); }
+  .dashes { width: 1px; height: 24px; border-left: 2px dashed var(--border); margin: 3px 0; }
+  .route-field { flex: 1; }
+
+  /* PACKAGE TYPES */
+  .pkg-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+  .pkg-option { display: none; }
+  .pkg-label {
+    border: none; border-radius: var(--radius);
+    padding: 12px 8px; text-align: center; cursor: pointer;
+    transition: all .2s; font-size: 13px; color: rgba(255,255,255,0.75);
+    background: rgba(255,255,255,0.05);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .pkg-label .pkg-icon { font-size: 22px; display: block; margin-bottom: 4px; }
+  .pkg-option:checked + .pkg-label {
+    border: none; background: var(--accent-light); color: var(--accent);
+  }
+
+  /* ESTIMATE */
+  .estimate-box {
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-top: 16px;
+  }
+  .estimate-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
+  .estimate-row:last-child { margin-bottom: 0; padding-top: 8px; border-top: 1px solid var(--border); font-weight: 500; }
+  .estimate-row span:last-child { font-family: 'DM Serif Display', serif; font-size: 16px; }
+
+  /* BUTTONS */
+  .btn {
+    width: 100%; padding: 12px; border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+    cursor: pointer; border: none; transition: all .2s;
+  }
+  .btn-primary { background: var(--accent); color: var(--white); }
+  .btn-primary:hover { background: #e05500; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255,106,0,0.4); }
+  .btn-back { background: transparent; color: var(--muted); border: 1px solid var(--border); flex: 0 0 80px; }
+  .btn-back:hover { background: rgba(255,255,255,0.07); }
+  .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-row .btn-primary { flex: 1; }
+
+  /* TRACK */
+  .track-panel {
+    max-width: 1100px; margin: 0 auto; padding: 0 40px 80px;
+  }
+  .track-title {
+    font-family: 'DM Serif Display', serif; font-size: 28px; margin-bottom: 6px;
+  }
+  .track-sub { color: var(--muted); margin-bottom: 32px; font-size: 14px; }
+  .track-input-row { display: flex; gap: 10px; max-width: 500px; margin-bottom: 40px; }
+  .track-input-row input {
+    flex: 1; padding: 10px 14px; border: 1px solid var(--border);
+    border-radius: var(--radius); font-family: 'DM Sans', sans-serif;
+    font-size: 14px; outline: none; background: rgba(255,255,255,0.07);
+    color: white;
+    transition: border-color .2s;
+  }
+  .track-input-row input:focus { border-color: var(--accent); }
+  .track-input-row input::placeholder { color: rgba(255,255,255,0.35); }
+  .track-input-row button {
+    padding: 10px 20px; background: var(--accent); color: white;
+    border: none; border-radius: var(--radius); cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+    transition: background .2s;
+  }
+  .track-input-row button:hover { background: #e05500; }
+
+  /* TIMELINE */
+  .timeline { max-width: 480px; }
+  .timeline-item { display: flex; gap: 20px; padding-bottom: 28px; position: relative; }
+  .timeline-item:not(:last-child)::before {
+    content: ''; position: absolute; left: 9px; top: 22px;
+    width: 1px; height: calc(100% - 8px); background: var(--border);
+  }
+  .tl-dot {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; margin-top: 2px;
+    border: 2px solid var(--border); background: var(--white);
+  }
+  .tl-dot.done { background: var(--success); border-color: var(--success); }
+  .tl-dot.active { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-light); }
+  .tl-content { flex: 1; }
+  .tl-status { font-weight: 500; font-size: 14px; margin-bottom: 2px; }
+  .tl-detail { font-size: 13px; color: var(--muted); }
+  .tl-time { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* TRACK CARD */
+  .track-card {
+    background: rgba(12,8,24,0.88); border: 1px solid var(--border); border-radius: 8px;
+    padding: 28px; display: none; margin-bottom: 32px;
+    backdrop-filter: blur(12px);
+  }
+  .track-card.visible { display: block; animation: fadeIn .3s ease; }
+  .track-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .track-id { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .track-route { font-family: 'DM Serif Display', serif; font-size: 18px; }
+  .status-badge {
+    padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    background: var(--accent-light); color: var(--accent);
+  }
+
+  /* SUCCESS */
+  .success-panel {
+    text-align: center; padding: 32px 0 16px;
+  }
+  .success-icon {
+    width: 56px; height: 56px; background: var(--success); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px; font-size: 24px; color: white;
+  }
+  .success-panel h3 { font-family: 'DM Serif Display', serif; font-size: 24px; margin-bottom: 8px; }
+  .success-panel p { color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 300px; margin: 0 auto 24px; }
+  .booking-ref {
+    display: inline-block; background: var(--paper); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 20px;
+    font-family: 'DM Serif Display', serif; font-size: 20px; letter-spacing: 2px;
+    margin-bottom: 24px; color: var(--accent);
+  }
+
+  /* HOW IT WORKS */
+  .how {
+    max-width: 1100px; margin: 0 auto 80px; padding: 0 40px;
+  }
+  .how h2 { font-family: 'DM Serif Display', serif; font-size: 32px; margin-bottom: 4px; }
+  .how-sub { color: var(--muted); margin-bottom: 40px; font-size: 14px; }
+  .how-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .how-item { }
+  .how-num { font-family: 'DM Serif Display', serif; font-size: 40px; color: var(--border); margin-bottom: 12px; }
+  .how-item h4 { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+  .how-item p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+  /* SECTION DIVIDER */
+  .divider { border: none; border-top: 1px solid var(--border); max-width: 1100px; margin: 60px auto; }
+
+  @media(max-width: 768px) {
+    nav { padding: 0 20px; }
+    nav ul { display: none; }
+    .hero { grid-template-columns: 1fr; gap: 40px; padding: 40px 20px; }
+    .hero-runner { display: none; }
+    .hero-text h1 { font-size: 36px; }
+    .stats { gap: 24px; }
+    .track-panel, .how { padding: 0 20px 60px; }
+    .field-row { grid-template-columns: 1fr; }
+    .how-grid { grid-template-columns: 1fr; gap: 24px; }
+    .pkg-grid { grid-template-columns: repeat(3,1fr); }
+  }
+</style>
+</head>
+<body>
+<div id="page-bg"></div>
+<div id="page-overlay"></div>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0NjAgMTAwIiB3aWR0aD0iNDYwIiBoZWlnaHQ9IjEwMCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJvbHRGaXJlIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjUwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojRkZENzAwIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iNDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojRkY2QTAwIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6I0NDMDAwMCIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0idGV4dEZpcmUiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6I0ZGNkEwMCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiNDQzAwMDAiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8ZmlsdGVyIGlkPSJnbG93Ij4KICAgICAgPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMi41IiByZXN1bHQ9ImNvbG9yZWRCbHVyIi8+CiAgICAgIDxmZU1lcmdlPgogICAgICAgIDxmZU1lcmdlTm9kZSBpbj0iY29sb3JlZEJsdXIiLz4KICAgICAgICA8ZmVNZXJnZU5vZGUgaW49IlNvdXJjZUdyYXBoaWMiLz4KICAgICAgPC9mZU1lcmdlPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgoKICA8IS0tIENpcmNsZSBnbG93IC0tPgogIDxjaXJjbGUgY3g9IjU0IiBjeT0iNTAiIHI9IjQ0IiBmaWxsPSIjRkY0NTAwIiBvcGFjaXR5PSIwLjE1IiBmaWx0ZXI9InVybCgjZ2xvdykiLz4KICA8IS0tIENpcmNsZSBiYWNrZ3JvdW5kIC0tPgogIDxjaXJjbGUgY3g9IjU0IiBjeT0iNTAiIHI9IjQ0IiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjYm9sdEZpcmUpIiBzdHJva2Utd2lkdGg9IjMiLz4KICA8IS0tIENpcmNsZSBmaWxsIC0tPgogIDxjaXJjbGUgY3g9IjU0IiBjeT0iNTAiIHI9IjQxIiBmaWxsPSIjMWEwODAwIi8+CgogIDwhLS0gQm9sdCBnbG93IHNoYWRvdyAtLT4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxMCwgOCkiIG9wYWNpdHk9IjAuMzUiIGZpbHRlcj0idXJsKCNnbG93KSI+CiAgICA8cG9seWdvbiBwb2ludHM9IjQ4LDAgMjIsNDIgMzgsNDIgMTgsODQgNjIsMzIgNDQsMzIgNjgsMCIgZmlsbD0iI0ZGNDUwMCIvPgogIDwvZz4KCiAgPCEtLSBNYWluIGxpZ2h0bmluZyBib2x0IC0tPgogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDEwLCA4KSI+CiAgICA8cG9seWdvbiBwb2ludHM9IjQ4LDAgMjIsNDIgMzgsNDIgMTgsODQgNjIsMzIgNDQsMzIgNjgsMCIgZmlsbD0idXJsKCNib2x0RmlyZSkiLz4KICAgIDwhLS0gQnJpZ2h0IGhpZ2hsaWdodCBzdHJlYWsgLS0+CiAgICA8cG9seWdvbiBwb2ludHM9IjUwLDQgMzgsMzAgNDYsMzAgMzQsNjAgNTUsMzIgNDUsMzIgNTgsNCIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjI4KSIvPgogIDwvZz4KCiAgPCEtLSBMSUdIVE5JTkcgd29yZG1hcmsgLS0+CiAgPHRleHQgeD0iOTYiIHk9IjQ4IgogICAgZm9udC1mYW1pbHk9IidBcmlhbCBCbGFjaycsICdJbXBhY3QnLCBzYW5zLXNlcmlmIgogICAgZm9udC1zaXplPSIzMiIgZm9udC13ZWlnaHQ9IjkwMCIKICAgIGZpbGw9InVybCgjdGV4dEZpcmUpIgogICAgbGV0dGVyLXNwYWNpbmc9IjEiCiAgICBmaWx0ZXI9InVybCgjZ2xvdykiPkxJR0hUTklORzwvdGV4dD4KCiAgPCEtLSBTUEVFRCB3b3JkbWFyayAtLT4KICA8dGV4dCB4PSI5NiIgeT0iNzQiCiAgICBmb250LWZhbWlseT0iJ0FyaWFsIEJsYWNrJywgJ0ltcGFjdCcsIHNhbnMtc2VyaWYiCiAgICBmb250LXNpemU9IjMyIiBmb250LXdlaWdodD0iOTAwIgogICAgZmlsbD0idXJsKCN0ZXh0RmlyZSkiCiAgICBsZXR0ZXItc3BhY2luZz0iMSIKICAgIGZpbHRlcj0idXJsKCNnbG93KSI+U1BFRUQ8L3RleHQ+CgogIDwhLS0gQWNjZW50IHVuZGVybGluZSBiYXIgLS0+CiAgPHJlY3QgeD0iOTYiIHk9Ijc5IiB3aWR0aD0iMzEwIiBoZWlnaHQ9IjMiIHJ4PSIxLjUiIGZpbGw9InVybCgjYm9sdEZpcmUpIiBvcGFjaXR5PSIwLjkiLz4KCiAgPCEtLSBDT1VSSUVSUyB0YWdsaW5lIC0tPgogIDx0ZXh0IHg9Ijk3IiB5PSI5NiIKICAgIGZvbnQtZmFtaWx5PSInQXJpYWwnLCBzYW5zLXNlcmlmIgogICAgZm9udC1zaXplPSIxMSIgZm9udC13ZWlnaHQ9IjYwMCIKICAgIGZpbGw9IiNGRjZBMDAiCiAgICBsZXR0ZXItc3BhY2luZz0iNCI+Q09VUklFUlM8L3RleHQ+Cjwvc3ZnPgo=" alt="Lightning Speed Couriers" style="height:70px;width:auto;" />
+  </div>
+  <ul>
+    <li><a href="#book">Book</a></li>
+    <li><a href="#track">Track</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#book" class="nav-cta">Schedule Pickup</a></li>
+  </ul>
+  <button class="hamburger" id="hamburger" aria-label="Open menu" onclick="toggleDrawer()">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- DRAWER OVERLAY -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="toggleDrawer()"></div>
+
+<!-- SIDE DRAWER -->
+<div class="nav-drawer" id="nav-drawer">
+  <nav class="drawer-nav">
+    <a href="#" onclick="toggleDrawer()"><span class="drawer-icon">🏢</span>About Us</a>
+    <a href="#" onclick="toggleDrawer()"><span class="drawer-icon">📦</span>Services</a>
+    <a href="#" onclick="toggleDrawer()"><span class="drawer-icon">❓</span>FAQ</a>
+    <a href="#" onclick="toggleDrawer()"><span class="drawer-icon">✉️</span>Contact Us</a>
+  </nav>
+  <div class="drawer-footer">
+    <a href="#book" class="drawer-cta" onclick="toggleDrawer()">⚡ Schedule a Pickup</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="book">
+  <div class="hero-text">
+    <h1>Fast, reliable<br><em>lightning</em><br>delivery.</h1>
+    <p>Lightning Speed Couriers gets your packages moving in minutes. We handle all sizes across the city — same day, next day, or whenever you need.</p>
+    <div class="stats">
+      <div>
+        <div class="stat-num">4.2K+</div>
+        <div class="stat-label">Deliveries / mo</div>
+      </div>
+      <div>
+        <div class="stat-num">98%</div>
+        <div class="stat-label">On-time rate</div>
+      </div>
+      <div>
+        <div class="stat-num">2hr</div>
+        <div class="stat-label">Avg delivery</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RUNNING COURIER -->
+  <div class="hero-runner">
+    <svg viewBox="0 0 160 320" xmlns="http://www.w3.org/2000/svg" aria-label="Courier running with package">
+      <defs>
+        <linearGradient id="skinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#FDBCB4"/>
+          <stop offset="100%" style="stop-color:#F0967A"/>
+        </linearGradient>
+        <linearGradient id="uniformGrad" x1="0%" y1="0%" x2="50%" y2="100%">
+          <stop offset="0%" style="stop-color:#FF6A00"/>
+          <stop offset="100%" style="stop-color:#CC0000"/>
+        </linearGradient>
+        <linearGradient id="boxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#FFD700"/>
+          <stop offset="100%" style="stop-color:#FF8C00"/>
+        </linearGradient>
+        <linearGradient id="shadowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:rgba(255,106,0,0.18)"/>
+          <stop offset="100%" style="stop-color:rgba(255,106,0,0)"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Ground shadow -->
+      <ellipse cx="80" cy="308" rx="42" ry="8" fill="rgba(200,82,42,0.15)"/>
+
+      <!-- BACK LEG (extended behind) -->
+      <g>
+        <!-- Upper back leg -->
+        <rect x="72" y="198" width="16" height="52" rx="8" fill="#CC0000" transform="rotate(30 80 198)"/>
+        <!-- Lower back leg -->
+        <rect x="62" y="238" width="14" height="46" rx="7" fill="#AA0000" transform="rotate(-10 69 238)"/>
+        <!-- Back shoe -->
+        <ellipse cx="58" cy="282" rx="18" ry="9" fill="#1a1a1a" transform="rotate(-5 58 282)"/>
+        <ellipse cx="62" cy="279" rx="12" ry="6" fill="#333" transform="rotate(-5 62 279)"/>
+      </g>
+
+      <!-- TORSO / UNIFORM -->
+      <rect x="54" y="128" width="52" height="72" rx="14" fill="url(#uniformGrad)"/>
+
+      <!-- Uniform stripe -->
+      <rect x="54" y="148" width="52" height="8" rx="3" fill="rgba(255,255,255,0.25)"/>
+
+      <!-- FRONT LEG (driving forward) -->
+      <g>
+        <!-- Upper front leg -->
+        <rect x="74" y="196" width="17" height="54" rx="8.5" fill="#FF6A00" transform="rotate(-25 82 196)"/>
+        <!-- Lower front leg -->
+        <rect x="88" y="236" width="15" height="48" rx="7.5" fill="#E05000" transform="rotate(15 95 236)"/>
+        <!-- Front shoe -->
+        <ellipse cx="102" cy="280" rx="20" ry="10" fill="#1a1a1a"/>
+        <ellipse cx="105" cy="277" rx="13" ry="6" fill="#333"/>
+        <!-- Shoe highlight -->
+        <ellipse cx="108" cy="275" rx="5" ry="2.5" fill="rgba(255,255,255,0.2)"/>
+      </g>
+
+      <!-- BACK ARM (holding box behind) -->
+      <g>
+        <rect x="50" y="132" width="13" height="44" rx="6.5" fill="#FF6A00" transform="rotate(20 56 132)"/>
+        <rect x="42" y="168" width="12" height="36" rx="6" fill="url(#skinGrad)" transform="rotate(-10 48 168)"/>
+      </g>
+
+      <!-- PACKAGE BOX -->
+      <g transform="translate(96, 108) rotate(-8)">
+        <!-- Box body -->
+        <rect x="0" y="0" width="46" height="40" rx="4" fill="url(#boxGrad)"/>
+        <!-- Box top face -->
+        <rect x="0" y="0" width="46" height="12" rx="4" fill="#FFD700"/>
+        <rect x="0" y="6" width="46" height="6" fill="#FFD700"/>
+        <!-- Box tape -->
+        <rect x="19" y="0" width="8" height="40" rx="2" fill="rgba(255,255,255,0.5)"/>
+        <rect x="0" y="16" width="46" height="8" rx="2" fill="rgba(255,255,255,0.5)"/>
+        <!-- Box label -->
+        <rect x="6" y="22" width="20" height="12" rx="2" fill="white" opacity="0.9"/>
+        <rect x="8" y="25" width="12" height="2" rx="1" fill="#FF6A00"/>
+        <rect x="8" y="29" width="8" height="2" rx="1" fill="#FF6A00"/>
+        <!-- Arrow on box -->
+        <text x="30" y="34" font-size="10" fill="#CC0000" font-weight="bold">↑</text>
+      </g>
+
+      <!-- FRONT ARM (raised, holding box) -->
+      <g>
+        <rect x="94" y="124" width="13" height="42" rx="6.5" fill="#CC0000" transform="rotate(-35 100 124)"/>
+        <rect x="106" y="104" width="12" height="34" rx="6" fill="url(#skinGrad)" transform="rotate(-55 112 104)"/>
+      </g>
+
+      <!-- NECK -->
+      <rect x="73" y="112" width="14" height="20" rx="7" fill="url(#skinGrad)"/>
+
+      <!-- HEAD -->
+      <ellipse cx="80" cy="96" rx="26" ry="28" fill="url(#skinGrad)"/>
+
+      <!-- Hair -->
+      <ellipse cx="80" cy="74" rx="26" ry="14" fill="#3D2314"/>
+      <ellipse cx="80" cy="70" rx="22" ry="10" fill="#4A2C17"/>
+      <!-- Hair detail -->
+      <path d="M58 80 Q65 68 80 66 Q95 68 102 80" fill="none" stroke="#3D2314" stroke-width="3" stroke-linecap="round"/>
+
+      <!-- Face -->
+      <!-- Eyes -->
+      <ellipse cx="70" cy="94" rx="4" ry="4.5" fill="white"/>
+      <ellipse cx="90" cy="94" rx="4" ry="4.5" fill="white"/>
+      <ellipse cx="71" cy="94" rx="2.5" ry="3" fill="#3D2314"/>
+      <ellipse cx="91" cy="94" rx="2.5" ry="3" fill="#3D2314"/>
+      <!-- Eye shine -->
+      <circle cx="72" cy="93" r="1" fill="white"/>
+      <circle cx="92" cy="93" r="1" fill="white"/>
+      <!-- Eyebrows (determined look) -->
+      <path d="M65 88 Q70 85 75 87" fill="none" stroke="#3D2314" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M85 87 Q90 85 95 88" fill="none" stroke="#3D2314" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- Mouth (focused grin) -->
+      <path d="M72 106 Q80 111 88 106" fill="none" stroke="#C0705A" stroke-width="2" stroke-linecap="round"/>
+      <!-- Nose -->
+      <path d="M78 98 Q80 104 82 98" fill="none" stroke="#D08060" stroke-width="1.5" stroke-linecap="round"/>
+
+      <!-- Ear -->
+      <ellipse cx="54" cy="96" rx="5" ry="7" fill="#F0967A"/>
+      <ellipse cx="106" cy="96" rx="5" ry="7" fill="#F0967A"/>
+
+      <!-- Helmet / Cap -->
+      <ellipse cx="80" cy="72" rx="28" ry="12" fill="#CC0000"/>
+      <rect x="52" y="67" width="56" height="10" rx="5" fill="#CC0000"/>
+      <rect x="52" y="72" width="62" height="6" rx="3" fill="#AA0000"/>
+      <!-- Cap brim -->
+      <ellipse cx="80" cy="78" rx="30" ry="5" fill="#880000"/>
+      <!-- Cap logo -->
+      <text x="72" y="75" font-size="9" fill="#FFD700" font-weight="bold">⚡</text>
+
+      <!-- Speed lines -->
+      <line x1="20" y1="140" x2="48" y2="140" stroke="#FF6A00" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+      <line x1="12" y1="158" x2="44" y2="158" stroke="#FF6A00" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
+      <line x1="18" y1="176" x2="46" y2="176" stroke="#FF6A00" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+    </svg>
+  </div>
+
+  <!-- BOOKING CARD -->
+  <div class="booking-card">
+
+    <!-- STEPS -->
+    <div class="steps">
+      <div class="step active" id="step1-tab">
+        <div class="step-num">1</div>
+        <span class="step-label">Details</span>
+      </div>
+      <div class="step" id="step2-tab">
+        <div class="step-num">2</div>
+        <span class="step-label">Schedule</span>
+      </div>
+      <div class="step" id="step3-tab">
+        <div class="step-num">3</div>
+        <span class="step-label">Contact</span>
+      </div>
+      <div class="step" id="step4-tab">
+        <div class="step-num">4</div>
+        <span class="step-label">Confirm</span>
+      </div>
+    </div>
+
+    <!-- PANEL 1: ADDRESSES + PACKAGE -->
+    <div class="panel active" id="panel1">
+      <div class="panel-title">Where & what?</div>
+      <div class="panel-sub">Enter your pickup and dropoff addresses.</div>
+
+      <div class="route-visual">
+        <div class="route-stop">
+          <div class="route-line">
+            <div class="dot filled"></div>
+            <div class="dashes"></div>
+          </div>
+          <div class="route-field field">
+            <label>Pickup Address</label>
+            <input type="text" id="pickup" placeholder="123 Main St, City" />
+          </div>
+        </div>
+        <div class="route-stop">
+          <div class="route-line">
+            <div class="dot"></div>
+          </div>
+          <div class="route-field field">
+            <label>Dropoff Address</label>
+            <input type="text" id="dropoff" placeholder="456 Oak Ave, City" />
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Delivery Type</label>
+      </div>
+      <div class="pkg-grid">
+        <div>
+          <input type="radio" name="pkg" id="pkg1" value="document" class="pkg-option" checked>
+          <label for="pkg1" class="pkg-label">
+            <span class="pkg-icon">📄</span>Document
+          </label>
+        </div>
+        <div>
+          <input type="radio" name="pkg" id="pkg2" value="small" class="pkg-option">
+          <label for="pkg2" class="pkg-label">
+            <span class="pkg-icon">📦</span>Small Box
+          </label>
+        </div>
+        <div>
+          <input type="radio" name="pkg" id="pkg3" value="large" class="pkg-option">
+          <label for="pkg3" class="pkg-label">
+            <span class="pkg-icon">🗃️</span>Large Box
+          </label>
+        </div>
+        <div>
+          <input type="radio" name="pkg" id="pkg4" value="medical" class="pkg-option">
+          <label for="pkg4" class="pkg-label">
+            <span class="pkg-icon">🏥</span>Medical Supply
+          </label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Special Instructions (optional)</label>
+        <textarea id="notes" placeholder="Fragile, leave at door, ring bell…"></textarea>
+      </div>
+
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-primary" onclick="goTo(2)">Continue →</button>
+      </div>
+    </div>
+
+    <!-- PANEL 2: DATE + TIME + ESTIMATE -->
+    <div class="panel" id="panel2">
+      <div class="panel-title">When?</div>
+      <div class="panel-sub">Choose your preferred pickup date and time.</div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Pickup Date</label>
+          <input type="date" id="pickup-date" />
+        </div>
+        <div class="field">
+          <label>Pickup Time</label>
+          <select id="pickup-time">
+            <option>8:00 AM – 10:00 AM</option>
+            <option>10:00 AM – 12:00 PM</option>
+            <option selected>12:00 PM – 2:00 PM</option>
+            <option>2:00 PM – 4:00 PM</option>
+            <option>4:00 PM – 6:00 PM</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Delivery Speed</label>
+        <select id="speed" onchange="updateEstimate()">
+          <option value="same">Same Day (+$8.00)</option>
+          <option value="next" selected>Next Day (+$0.00)</option>
+          <option value="scheduled">Scheduled Date (+$0.00)</option>
+        </select>
+      </div>
+
+      <div class="estimate-box">
+        <div class="estimate-row">
+          <span>Base rate</span><span>$12.00</span>
+        </div>
+        <div class="estimate-row">
+          <span id="pkg-label-est">Delivery type surcharge</span><span id="pkg-price">$0.00</span>
+        </div>
+        <div class="estimate-row">
+          <span id="speed-label">Delivery speed</span><span id="speed-price">$0.00</span>
+        </div>
+        <div class="estimate-row">
+          <span>Estimated Total</span><span id="total-price">$12.00</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-back" onclick="goTo(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(3)">Continue →</button>
+      </div>
+    </div>
+
+    <!-- PANEL 3: CONTACT -->
+    <div class="panel" id="panel3">
+      <div class="panel-title">Your details</div>
+      <div class="panel-sub">Who should we contact for this booking?</div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>First Name</label>
+          <input type="text" id="fname" placeholder="Jane" />
+        </div>
+        <div class="field">
+          <label>Last Name</label>
+          <input type="text" id="lname" placeholder="Smith" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="jane@example.com" />
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <input type="tel" id="phone" placeholder="+1 (555) 000-0000" />
+      </div>
+      <div class="field">
+        <label>Recipient Name</label>
+        <input type="text" id="recipient" placeholder="Who's receiving the package?" />
+      </div>
+      <div class="field">
+        <label>Recipient Phone</label>
+        <input type="tel" id="recipient-phone" placeholder="+1 (555) 000-0000" />
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-back" onclick="goTo(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goTo(4)">Review Booking →</button>
+      </div>
+    </div>
+
+    <!-- PANEL 4: CONFIRM -->
+    <div class="panel" id="panel4">
+      <div class="panel-title">Review & confirm</div>
+      <div class="panel-sub">Double-check everything before we lock it in.</div>
+
+      <div class="estimate-box" style="margin-bottom:16px;">
+        <div class="estimate-row" style="margin-bottom:10px;"><span style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Pickup</span><span id="confirm-pickup" style="font-size:13px;text-align:right;max-width:60%;">—</span></div>
+        <div class="estimate-row" style="margin-bottom:10px;"><span style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Dropoff</span><span id="confirm-dropoff" style="font-size:13px;text-align:right;max-width:60%;">—</span></div>
+        <div class="estimate-row" style="margin-bottom:10px;"><span style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Date & Time</span><span id="confirm-time" style="font-size:13px;">—</span></div>
+        <div class="estimate-row" style="margin-bottom:10px;"><span style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Package</span><span id="confirm-pkg" style="font-size:13px;">—</span></div>
+        <div class="estimate-row" style="margin-bottom:10px;"><span style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.5px;">Contact</span><span id="confirm-contact" style="font-size:13px;">—</span></div>
+        <div class="estimate-row"><span>Total</span><span id="confirm-total" style="color:var(--accent);">—</span></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-back" onclick="goTo(3)">← Back</button>
+        <button class="btn btn-primary" onclick="confirmBooking()">Confirm Booking ✓</button>
+      </div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="panel" id="panel5">
+      <div class="success-panel">
+        <div class="success-icon">✓</div>
+        <h3>You're all set!</h3>
+        <p>Your pickup has been scheduled. We'll send a confirmation to your email with tracking details.</p>
+        <div class="booking-ref" id="booking-ref">SW-000000</div>
+        <button class="btn btn-primary" style="max-width:280px;margin:0 auto;" onclick="resetForm()">Book Another Pickup</button>
+      </div>
+    </div>
+
+  </div><!-- /booking-card -->
+</section>
+
+<hr class="divider">
+
+<!-- TRACK -->
+<section class="track-panel" id="track">
+  <div class="track-title">Track your order</div>
+  <div class="track-sub">Enter your booking reference to see live status.</div>
+
+  <div class="track-input-row">
+    <input type="text" id="track-input" placeholder="e.g. SW-482931" />
+    <button onclick="trackOrder()">Track</button>
+  </div>
+
+  <div class="track-card" id="track-card">
+    <div class="track-card-header">
+      <div>
+        <div class="track-id">Booking Reference</div>
+        <div class="track-route" id="track-route">Downtown → Airport</div>
+      </div>
+      <div class="status-badge" id="track-status">In Transit</div>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-content">
+          <div class="tl-status">Order Confirmed</div>
+          <div class="tl-detail">Booking received and confirmed.</div>
+          <div class="tl-time">9:02 AM</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-content">
+          <div class="tl-status">Courier Assigned</div>
+          <div class="tl-detail">Alex M. is your courier today.</div>
+          <div class="tl-time">9:45 AM</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-dot active"></div>
+        <div class="tl-content">
+          <div class="tl-status">Picked Up</div>
+          <div class="tl-detail">Package collected from pickup address.</div>
+          <div class="tl-time">10:30 AM</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-status">Out for Delivery</div>
+          <div class="tl-detail">Estimated arrival: 12:00 – 2:00 PM</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-dot"></div>
+        <div class="tl-content">
+          <div class="tl-status">Delivered</div>
+          <div class="tl-detail">Awaiting delivery confirmation.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <h2>How it works</h2>
+  <div class="how-sub">Three simple steps to get your package moving.</div>
+  <div class="how-grid">
+    <div class="how-item">
+      <div class="how-num">01</div>
+      <h4>Book online</h4>
+      <p>Fill in your pickup and dropoff details, select a time window, and get an instant price estimate — no calls needed.</p>
+    </div>
+    <div class="how-item">
+      <div class="how-num">02</div>
+      <h4>We collect</h4>
+      <p>A courier arrives at your door within the chosen time slot. No waiting around — you'll get a notification when they're on the way.</p>
+    </div>
+    <div class="how-item">
+      <div class="how-num">03</div>
+      <h4>Track & receive</h4>
+      <p>Follow your package in real time with your booking reference. Your recipient gets a notification when delivery is imminent.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+// ── Hamburger drawer ──
+function toggleDrawer() {
+  const drawer = document.getElementById('nav-drawer');
+  const overlay = document.getElementById('drawer-overlay');
+  const btn = document.getElementById('hamburger');
+  drawer.classList.toggle('open');
+  overlay.classList.toggle('open');
+  btn.classList.toggle('open');
+  document.body.style.overflow = drawer.classList.contains('open') ? 'hidden' : '';
+}
+
+// ── EmailJS Config ──
+const EMAILJS_SERVICE_ID  = 'service_8nr1ewk';
+const EMAILJS_TEMPLATE_ID = 'template_v43zgh8';
+const EMAILJS_PUBLIC_KEY  = 'UNEZC1I-LA3nE2pe3';
+emailjs.init(EMAILJS_PUBLIC_KEY);
+
+async function sendConfirmationEmail(bookingData) {
+  const templateParams = {
+    customer_name:    bookingData.customer_name,
+    customer_email:   bookingData.customer_email,
+    booking_ref:      bookingData.booking_ref,
+    pickup_address:   bookingData.pickup_address,
+    dropoff_address:  bookingData.dropoff_address,
+    delivery_type:    bookingData.delivery_type,
+    pickup_date:      bookingData.pickup_date,
+    pickup_time:      bookingData.pickup_time,
+    delivery_speed:   bookingData.delivery_speed,
+    recipient_name:   bookingData.recipient_name,
+    recipient_phone:  bookingData.recipient_phone,
+    total_price:      '$' + bookingData.total_price.toFixed(2),
+    notes:            bookingData.notes || 'None'
+  };
+
+  await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, templateParams);
+  console.log('✅ Confirmation email sent!');
+}
+
+// ── Google Places Autocomplete ──
+function initAutocomplete() {
+  const options = {
+    componentRestrictions: { country: 'us' }, // restrict to US
+    fields: ['formatted_address', 'geometry'],
+    types: ['address']
+  };
+
+  const pickupInput = document.getElementById('pickup');
+  const dropoffInput = document.getElementById('dropoff');
+
+  if (pickupInput) {
+    const pickupAuto = new google.maps.places.Autocomplete(pickupInput, options);
+    pickupAuto.addListener('place_changed', () => {
+      const place = pickupAuto.getPlace();
+      if (place.formatted_address) {
+        pickupInput.value = place.formatted_address;
+      }
+    });
+  }
+
+  if (dropoffInput) {
+    const dropoffAuto = new google.maps.places.Autocomplete(dropoffInput, options);
+    dropoffAuto.addListener('place_changed', () => {
+      const place = dropoffAuto.getPlace();
+      if (place.formatted_address) {
+        dropoffInput.value = place.formatted_address;
+      }
+    });
+  }
+}
+
+// ── Supabase Config ──
+const SUPABASE_URL = 'https://zrzynhdrtknslfxjuwdj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpyenluaGRydGtuc2xmeGp1d2RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5OTE2NzgsImV4cCI6MjA5MDU2NzY3OH0.n1k6IO7dVn4_rR90QLEwIMHsHpBu9qJNxze8eHiFby8';
+
+async function saveToSupabase(bookingData) {
+  console.log('📤 Sending to Supabase:', JSON.stringify(bookingData, null, 2));
+
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/bookings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Prefer': 'return=minimal',
+      'X-Client-Info': 'lightning-speed-couriers'
+    },
+    body: JSON.stringify(bookingData)
+  });
+
+  console.log('📥 Supabase response status:', response.status);
+
+  if (response.status === 401 || response.status === 403) {
+    const txt = await response.text();
+    console.error('Auth error:', txt);
+    throw new Error(`HTTP ${response.status}: ${txt}`);
+  }
+
+  if (!response.ok) {
+    const txt = await response.text();
+    console.error('Error:', txt);
+    throw new Error(`HTTP ${response.status}: ${txt}`);
+  }
+}
+
+// ── State ──
+let currentStep = 1;
+
+// Set today as min date
+document.addEventListener('DOMContentLoaded', () => {
+  const d = document.getElementById('pickup-date');
+  const today = new Date().toISOString().split('T')[0];
+  d.min = today; d.value = today;
+  updateEstimate();
+});
+
+// ── Step navigation ──
+function goTo(n) {
+  document.getElementById('panel' + currentStep).classList.remove('active');
+  document.getElementById('step' + currentStep + '-tab').classList.remove('active');
+  if (n > currentStep) {
+    document.getElementById('step' + currentStep + '-tab').classList.add('done');
+    const numEl = document.querySelector('#step' + currentStep + '-tab .step-num');
+    numEl.textContent = '';
+  }
+  currentStep = n;
+  document.getElementById('panel' + n).classList.add('active');
+  const tab = document.getElementById('step' + n + '-tab');
+  tab.classList.add('active');
+  tab.classList.remove('done');
+  const numEl = tab.querySelector('.step-num');
+  numEl.textContent = n;
+  if (n === 4) populateConfirm();
+}
+
+// ── Estimate ──
+const prices = { document: 0, small: 4, large: 10, medical: 15 };
+const pkgNames = { document: 'Document', small: 'Small Box', large: 'Large Box', medical: 'Medical Supply' };
+const speedPrices = { same: 8, next: 0, scheduled: 0 };
+
+function updateEstimate() {
+  const pkg = document.querySelector('input[name="pkg"]:checked')?.value || 'document';
+  const speed = document.getElementById('speed')?.value || 'next';
+  const base = 12;
+  const pkgP = prices[pkg];
+  const speedP = speedPrices[speed];
+  const total = base + pkgP + speedP;
+  document.getElementById('pkg-label-est').textContent = pkgNames[pkg] + ' type surcharge';
+  document.getElementById('pkg-price').textContent = '$' + pkgP.toFixed(2);
+  document.getElementById('speed-price').textContent = '$' + speedP.toFixed(2);
+  document.getElementById('total-price').textContent = '$' + total.toFixed(2);
+}
+document.querySelectorAll('input[name="pkg"]').forEach(r => r.addEventListener('change', updateEstimate));
+
+// ── Confirm summary ──
+function populateConfirm() {
+  const pkg = document.querySelector('input[name="pkg"]:checked')?.value || 'document';
+  const speed = document.getElementById('speed').value;
+  const speedP = speedPrices[speed];
+  const total = 12 + prices[pkg] + speedP;
+  const date = document.getElementById('pickup-date').value;
+  const time = document.getElementById('pickup-time').value;
+  const fname = document.getElementById('fname').value || '—';
+  const lname = document.getElementById('lname').value || '';
+  document.getElementById('confirm-pickup').textContent = document.getElementById('pickup').value || '—';
+  document.getElementById('confirm-dropoff').textContent = document.getElementById('dropoff').value || '—';
+  document.getElementById('confirm-time').textContent = (date || '—') + ', ' + time;
+  document.getElementById('confirm-pkg').textContent = pkgNames[pkg];
+  document.getElementById('confirm-contact').textContent = fname + ' ' + lname;
+  document.getElementById('confirm-total').textContent = '$' + total.toFixed(2);
+}
+
+// ── Confirm booking ──
+async function confirmBooking() {
+  const pkg = document.querySelector('input[name="pkg"]:checked')?.value || 'document';
+  const speed = document.getElementById('speed').value;
+  const total = 12 + prices[pkg] + speedPrices[speed];
+  const ref = 'LSC-' + Math.floor(100000 + Math.random() * 900000);
+
+  const bookingData = {
+    pickup_address:   document.getElementById('pickup').value,
+    dropoff_address:  document.getElementById('dropoff').value,
+    delivery_type:    pkgNames[pkg],
+    pickup_date:      document.getElementById('pickup-date').value,
+    pickup_time:      document.getElementById('pickup-time').value,
+    delivery_speed:   speed,
+    customer_name:    document.getElementById('fname').value + ' ' + document.getElementById('lname').value,
+    customer_email:   document.getElementById('email').value,
+    customer_phone:   document.getElementById('phone').value,
+    recipient_name:   document.getElementById('recipient').value,
+    recipient_phone:  document.getElementById('recipient-phone').value,
+    notes:            document.getElementById('notes').value,
+    total_price:      total,
+    booking_ref:      ref,
+    status:           'Confirmed'
+  };
+
+  // Show loading state on button
+  const btn = document.querySelector('#panel4 .btn-primary');
+  const originalText = btn.textContent;
+  btn.textContent = 'Saving...';
+  btn.disabled = true;
+
+  try {
+    await saveToSupabase(bookingData);
+
+    // Send confirmation email
+    try {
+      await sendConfirmationEmail(bookingData);
+    } catch(emailErr) {
+      console.warn('Email failed but booking was saved:', emailErr);
+    }
+
+    document.getElementById('booking-ref').textContent = ref;
+    document.getElementById('panel4').classList.remove('active');
+    document.getElementById('panel5').classList.add('active');
+    [1,2,3,4].forEach(i => {
+      const tab = document.getElementById('step' + i + '-tab');
+      tab.classList.remove('active');
+      tab.classList.add('done');
+      tab.querySelector('.step-num').textContent = '';
+    });
+  } catch (err) {
+    console.error('❌ Supabase error:', err);
+    btn.textContent = originalText;
+    btn.disabled = false;
+    alert('Booking failed ❌\n\nError: ' + err.message + '\n\nPlease screenshot this and share it.');
+  }
+}
+
+// ── Reset ──
+function resetForm() {
+  location.reload();
+}
+
+// ── Track ──
+function trackOrder() {
+  const val = document.getElementById('track-input').value.trim();
+  if (!val) return;
+  const card = document.getElementById('track-card');
+  document.getElementById('track-route').textContent = 'Package in transit';
+  card.classList.add('visible');
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+</script>
+</body>
+</html>

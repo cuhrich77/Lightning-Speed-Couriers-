@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDoSc-yy9nk3Tcm2a-EqxfXpPUyDrp0I3k&libraries=places&callback=initAutocomplete" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -843,9 +844,23 @@
       <div class="success-panel">
         <div class="success-icon">✓</div>
         <h3>You're all set!</h3>
-        <p>Your pickup has been scheduled. We'll send a confirmation to your email with tracking details.</p>
-        <div class="booking-ref" id="booking-ref">SW-000000</div>
-        <button class="btn btn-primary" style="max-width:280px;margin:0 auto;" onclick="resetForm()">Book Another Pickup</button>
+        <p>Your pickup has been scheduled. Scan or print your QR code to track your delivery anytime.</p>
+        <div class="booking-ref" id="booking-ref">LSC-000000</div>
+
+        <!-- QR CODE -->
+        <div id="qr-wrapper" style="margin: 20px auto; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+          <div id="qr-code" style="
+            background: white; padding: 14px; border-radius: 8px;
+            display: inline-block;
+            box-shadow: 0 4px 20px rgba(255,106,0,0.2);
+          "></div>
+          <p style="font-size:12px;color:var(--muted);">Scan to track your delivery</p>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:4px;">
+          <button class="btn btn-primary" style="max-width:180px;" onclick="printQR()">🖨 Print QR Code</button>
+          <button class="btn btn-back" style="max-width:180px;flex:none;" onclick="resetForm()">New Booking</button>
+        </div>
       </div>
     </div>
 
@@ -942,6 +957,19 @@
 </section>
 
 <script>
+// ── Auto-track from QR scan ──
+const urlParams = new URLSearchParams(window.location.search);
+const trackRef = urlParams.get('track');
+if (trackRef) {
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      document.getElementById('track-input').value = trackRef;
+      document.getElementById('track').scrollIntoView({ behavior: 'smooth' });
+      trackOrder();
+    }, 800);
+  });
+}
+
 // ── Hamburger drawer ──
 function toggleDrawer() {
   const drawer = document.getElementById('nav-drawer');
@@ -1163,12 +1191,67 @@ async function confirmBooking() {
       tab.classList.add('done');
       tab.querySelector('.step-num').textContent = '';
     });
+    generateQR(ref);
   } catch (err) {
     console.error('❌ Supabase error:', err);
     btn.textContent = originalText;
     btn.disabled = false;
     alert('Booking failed ❌\n\nError: ' + err.message + '\n\nPlease screenshot this and share it.');
   }
+}
+
+// ── QR Code ──
+function generateQR(ref) {
+  const qrEl = document.getElementById('qr-code');
+  qrEl.innerHTML = '';
+  const trackingUrl = `${window.location.origin}${window.location.pathname}?track=${ref}#track`;
+  new QRCode(qrEl, {
+    text: trackingUrl,
+    width: 160,
+    height: 160,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  });
+}
+
+function printQR() {
+  const ref = document.getElementById('booking-ref').textContent;
+  const qrEl = document.getElementById('qr-code');
+  const canvas = qrEl.querySelector('canvas');
+  const img = qrEl.querySelector('img');
+  const qrSrc = canvas ? canvas.toDataURL() : (img ? img.src : '');
+
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Lightning Speed Couriers — ${ref}</title>
+      <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: white; color: black; }
+        .logo { font-size: 28px; font-weight: 900; color: #FF6A00; margin-bottom: 6px; }
+        .sub { font-size: 12px; color: #888; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 30px; }
+        .qr { margin: 20px auto; }
+        .qr img { width: 200px; height: 200px; }
+        .ref { font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #FF6A00; margin: 16px 0; }
+        .instruction { font-size: 13px; color: #555; margin-bottom: 30px; }
+        .details { font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 16px; }
+        @media print { body { margin: 0; } }
+      </style>
+    </head>
+    <body>
+      <div class="logo">⚡ LIGHTNING SPEED</div>
+      <div class="sub">Couriers</div>
+      <div class="qr"><img src="${qrSrc}" alt="QR Code"/></div>
+      <div class="ref">${ref}</div>
+      <div class="instruction">Scan this QR code to track your delivery in real time</div>
+      <div class="details">lightningspeedcouriers.vercel.app</div>
+      <script>window.onload = () => window.print();<\/script>
+    </body>
+    </html>
+  `);
+  win.document.close();
 }
 
 // ── Reset ──

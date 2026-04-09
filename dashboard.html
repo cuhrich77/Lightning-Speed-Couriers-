@@ -332,6 +332,68 @@
   .toast.success { border-color: var(--success); color: var(--success); }
   .toast.error { border-color: var(--danger); color: var(--danger); }
 
+  /* DRIVERS */
+  .driver-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 20px; }
+  .driver-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    transition: border-color .2s;
+  }
+  .driver-card:hover { border-color: rgba(255,106,0,0.3); }
+  .driver-card-top { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .driver-avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--accent); display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: white; flex-shrink: 0;
+  }
+  .driver-name { font-size: 15px; font-weight: 600; }
+  .driver-email { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .driver-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .driver-tag {
+    font-size: 11px; padding: 3px 10px; border-radius: 20px;
+    background: rgba(255,255,255,0.06); color: var(--muted);
+  }
+  .driver-status-active { background: rgba(74,222,128,0.12); color: var(--success); }
+  .driver-status-inactive { background: rgba(248,113,113,0.12); color: var(--danger); }
+  .driver-actions { display: flex; gap: 8px; }
+  .btn-driver-action {
+    flex: 1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); font-family: 'DM Sans', sans-serif;
+    font-size: 12px; cursor: pointer; transition: all .15s; text-align: center;
+  }
+  .btn-driver-action:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-driver-danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ADD DRIVER FORM */
+  .add-driver-form {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+    display: none;
+  }
+  .add-driver-form.open { display: block; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+  .form-field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 6px; }
+  .form-field input, .form-field select {
+    width: 100%; padding: 10px 14px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
+    transition: border-color .2s;
+  }
+  .form-field input:focus, .form-field select:focus { border-color: var(--accent); }
+  .form-field input::placeholder { color: var(--muted); }
+  .form-field select option { background: #120a20; }
+  .btn-add-submit {
+    padding: 10px 24px; background: var(--accent); color: white;
+    border: none; border-radius: 6px; font-family: 'DM Sans', sans-serif;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: background .2s;
+  }
+  .btn-add-submit:hover { background: #e05500; }
+  .btn-cancel-form {
+    padding: 10px 20px; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; margin-left: 8px;
+  }
+
   /* RESPONSIVE */
   @media(max-width: 900px) {
     .sidebar { width: 60px; }
@@ -379,6 +441,9 @@
     </div>
     <div class="nav-item" onclick="showSection('earnings')">
       <span class="nav-icon">💰</span><span>Earnings</span>
+    </div>
+    <div class="nav-item" onclick="showSection('drivers')">
+      <span class="nav-icon">🚗</span><span>Drivers</span>
     </div>
     <div class="sidebar-footer">
       <div class="user-info">
@@ -496,6 +561,53 @@
       <div class="table-card">
         <div class="table-header"><div class="table-title">Revenue by Delivery Type</div></div>
         <div id="earnings-table"></div>
+      </div>
+    </div>
+
+    <!-- DRIVERS SECTION -->
+    <div id="section-drivers" style="display:none;">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Drivers</div>
+          <div class="page-sub">Manage approved drivers who can access the driver app</div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn-refresh" onclick="toggleAddDriverForm()">➕ Add Driver</button>
+          <button class="btn-refresh" onclick="loadDrivers()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <!-- ADD DRIVER FORM -->
+      <div class="add-driver-form" id="add-driver-form" style="display:none;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1px;color:var(--accent);margin-bottom:16px;">Add New Driver</div>
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Full Name</label>
+            <input type="text" id="driver-name" placeholder="John Smith" />
+          </div>
+          <div class="form-field">
+            <label>Email Address</label>
+            <input type="email" id="driver-email" placeholder="john@example.com" />
+          </div>
+          <div class="form-field">
+            <label>Phone Number</label>
+            <input type="tel" id="driver-phone" placeholder="+1 555 000 0000" />
+          </div>
+          <div class="form-field">
+            <label>Status</label>
+            <select id="driver-status">
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-add-submit" onclick="addDriver()">Add Driver</button>
+        <button class="btn-cancel-form" onclick="toggleAddDriverForm()">Cancel</button>
+      </div>
+
+      <!-- DRIVER CARDS -->
+      <div id="drivers-grid">
+        <div class="loading"><div class="spinner"></div>Loading drivers...</div>
       </div>
     </div>
 
@@ -749,6 +861,121 @@ function showSection(name) {
   event.currentTarget.classList.add('active');
   document.getElementById('section-bookings').style.display = name === 'bookings' ? 'block' : 'none';
   document.getElementById('section-earnings').style.display = name === 'earnings' ? 'block' : 'none';
+  document.getElementById('section-drivers').style.display = name === 'drivers' ? 'block' : 'none';
+  if (name === 'drivers') loadDrivers();
+}
+
+// ── TOGGLE ADD FORM ──
+function toggleAddDriverForm() {
+  document.getElementById('add-driver-form').classList.toggle('open');
+  document.getElementById('driver-name').value = '';
+  document.getElementById('driver-email').value = '';
+  document.getElementById('driver-phone').value = '';
+}
+
+// ── LOAD DRIVERS ──
+async function loadDrivers() {
+  document.getElementById('drivers-grid').innerHTML =
+    `<div class="loading"><div class="spinner"></div>Loading drivers...</div>`;
+
+  const { data, error } = await sb
+    .from('drivers')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    document.getElementById('drivers-grid').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">⚠️</div>Error: ${error.message}<br><br>
+      <small style="color:var(--muted)">Make sure you have created the drivers table in Supabase SQL Editor.</small></div>`;
+    return;
+  }
+
+  if (!data.length) {
+    document.getElementById('drivers-grid').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">🚗</div>No drivers yet. Click <strong>Add Driver</strong> to get started.</div>`;
+    return;
+  }
+
+  let html = '<div class="driver-grid">';
+  data.forEach(d => {
+    const initials = (d.name || 'D').split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+    const statusClass = d.status === 'active' ? 'driver-status-active' : 'driver-status-inactive';
+    html += `
+    <div class="driver-card">
+      <div class="driver-card-top">
+        <div class="driver-avatar">${initials}</div>
+        <div>
+          <div class="driver-name">${d.name || '—'}</div>
+          <div class="driver-email">${d.email || '—'}</div>
+        </div>
+      </div>
+      <div class="driver-meta">
+        <span class="driver-tag ${statusClass}">${d.status === 'active' ? '✅ Active' : '❌ Inactive'}</span>
+        ${d.phone ? `<span class="driver-tag">📞 ${d.phone}</span>` : ''}
+      </div>
+      <div class="driver-actions">
+        <button class="btn-driver-action" onclick="toggleDriverStatus('${d.id}', '${d.status}')">
+          ${d.status === 'active' ? '⏸ Deactivate' : '▶ Activate'}
+        </button>
+        <button class="btn-driver-action btn-driver-danger" onclick="removeDriver('${d.id}', '${d.name}')">
+          🗑 Remove
+        </button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  document.getElementById('drivers-grid').innerHTML = html;
+}
+
+// ── ADD DRIVER ──
+async function addDriver() {
+  const name = document.getElementById('driver-name').value.trim();
+  const email = document.getElementById('driver-email').value.trim();
+  const phone = document.getElementById('driver-phone').value.trim();
+  const status = document.getElementById('driver-status').value;
+
+  if (!name || !email) { showToast('Name and email are required', 'error'); return; }
+
+  const { error } = await sb.from('drivers').insert([{ name, email, phone, status }]);
+
+  if (error) {
+    showToast(error.message.includes('unique') ? 'This email is already a driver' : 'Failed to add driver', 'error');
+    return;
+  }
+
+  showToast('✅ Driver added successfully!', 'success');
+  toggleAddDriverForm();
+  loadDrivers();
+}
+
+// ── TOGGLE STATUS ──
+async function toggleDriverStatus(id, currentStatus) {
+  const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+  const { error } = await sb.from('drivers').update({ status: newStatus }).eq('id', id);
+  if (error) { showToast('Failed to update status', 'error'); return; }
+  showToast(`Driver ${newStatus === 'active' ? 'activated' : 'deactivated'}`, 'success');
+  loadDrivers();
+}
+
+// ── REMOVE DRIVER ──
+async function removeDriver(id, name) {
+  if (!confirm(`Remove ${name} from the driver list? They will lose access to the app.`)) return;
+  const { error } = await sb.from('drivers').delete().eq('id', id);
+  if (error) { showToast('Failed to remove driver', 'error'); return; }
+  showToast('Driver removed', 'success');
+  loadDrivers();
+}
+
+// ── TOGGLE ADD DRIVER FORM ──
+function toggleAddDriverForm() {
+  const form = document.getElementById('add-driver-form');
+  const isVisible = form.style.display !== 'none' && form.style.display !== '';
+  form.style.display = isVisible ? 'none' : 'block';
+  if (!isVisible) {
+    document.getElementById('driver-name').value = '';
+    document.getElementById('driver-email').value = '';
+    document.getElementById('driver-phone').value = '';
+  }
 }
 
 // ── TOAST ──

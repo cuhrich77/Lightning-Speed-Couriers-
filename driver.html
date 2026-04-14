@@ -10,6 +10,7 @@
 <title>LSC Driver App</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -95,22 +96,7 @@
     margin-top: 4px;
   }
   .btn-login:active { transform: scale(0.98); }
-  .btn-google {
-    width: 100%; padding: 14px;
-    background: white; color: #333;
-    border: none; border-radius: var(--radius);
-    font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600;
-    cursor: pointer; transition: all .2s;
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    margin-bottom: 16px;
-  }
-  .divider-or {
-    display: flex; align-items: center; gap: 12px;
-    margin: 16px 0; color: var(--muted); font-size: 12px;
-  }
-  .divider-or::before, .divider-or::after {
-    content: ''; flex: 1; height: 1px; background: var(--border);
-  }
+  .divider-or { display: none; }
   .login-error {
     background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3);
     color: var(--danger); border-radius: 8px; padding: 10px 14px;
@@ -351,25 +337,34 @@
   <div class="login-title">Driver App</div>
   <div class="login-sub">Lightning Speed Couriers</div>
 
-  <div class="login-card">
-    <button class="btn-google" onclick="signInWithGoogle()">
-      <svg width="18" height="18" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-      </svg>
-      Sign in with Google
-    </button>
-
-    <div class="divider-or">or sign in with email</div>
-
+  <!-- STEP 1: Enter email -->
+  <div class="login-card" id="step-email">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;text-align:center;">Enter your email to receive your access code</div>
     <div id="login-error" class="login-error"></div>
-    <div class="field-label">Email</div>
+    <div class="field-label">Email Address</div>
     <input class="field-input" type="email" id="login-email" placeholder="driver@example.com" />
-    <div class="field-label">Password</div>
-    <input class="field-input" type="password" id="login-password" placeholder="••••••••" />
-    <button class="btn-login" onclick="signInWithEmail()">Sign In</button>
+    <button class="btn-login" onclick="requestTempPassword()">Send My Access Code →</button>
+  </div>
+
+  <!-- STEP 2: Enter temp password sent by email -->
+  <div class="login-card" id="step-temppass" style="display:none;">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;text-align:center;">We emailed your temporary access code. Enter it below.</div>
+    <div id="login-error-2" class="login-error"></div>
+    <div class="field-label">Temporary Access Code</div>
+    <input class="field-input" type="password" id="login-temppass" placeholder="Enter your access code" />
+    <button class="btn-login" onclick="signInWithTempPassword()">Sign In →</button>
+    <button onclick="document.getElementById('step-email').style.display='block';document.getElementById('step-temppass').style.display='none';" style="width:100%;margin-top:10px;padding:10px;background:transparent;border:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;">← Back</button>
+  </div>
+
+  <!-- STEP 3: Set permanent password (shown after first login) -->
+  <div class="login-card" id="step-newpass" style="display:none;">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;text-align:center;">Welcome! Please create a permanent password for your account.</div>
+    <div id="login-error-3" class="login-error"></div>
+    <div class="field-label">New Password</div>
+    <input class="field-input" type="password" id="new-password" placeholder="Create a strong password" />
+    <div class="field-label">Confirm Password</div>
+    <input class="field-input" type="password" id="confirm-password" placeholder="Repeat your password" />
+    <button class="btn-login" onclick="setNewPassword()">Save Password & Enter App →</button>
   </div>
 </div>
 
@@ -480,43 +475,166 @@ const sb = supabase.createClient(
 let isOnline = false;
 let allDeliveries = [];
 let currentUser = null;
+let currentDriverEmail = '';
 
-// ── AUTH ──
-async function signInWithGoogle() {
-  const { error } = await sb.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: window.location.href }
-  });
-  if (error) showError(error.message);
+// ── EmailJS ──
+const EMAILJS_SERVICE_ID  = 'service_8nr1ewk';
+const EMAILJS_TEMPLATE_ID = 'template_v43zgh8';
+const EMAILJS_PUBLIC_KEY  = 'UNEZC1I-LA3nE2pe3';
+
+// ── STEP 1: Driver enters email → look up temp password → email it ──
+async function requestTempPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) { showError('Please enter your email address'); return; }
+
+  const btn = document.querySelector('#step-email .btn-login');
+  btn.textContent = 'Sending...'; btn.disabled = true;
+
+  // Look up driver in database
+  const { data: driver, error } = await sb
+    .from('drivers')
+    .select('*')
+    .eq('email', email)
+    .eq('status', 'active')
+    .single();
+
+  if (error || !driver) {
+    showError('⛔ No active driver account found for this email. Contact your administrator.');
+    btn.textContent = 'Send My Access Code →'; btn.disabled = false;
+    return;
+  }
+
+  if (!driver.temp_password) {
+    showError('No access code found. Please contact your administrator to reset your password.');
+    btn.textContent = 'Send My Access Code →'; btn.disabled = false;
+    return;
+  }
+
+  // Send temp password via EmailJS
+  try {
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      customer_name: driver.name,
+      customer_email: email,
+      booking_ref: 'Your Access Code',
+      pickup_address: driver.temp_password,
+      dropoff_address: '—',
+      delivery_type: 'Driver App Login',
+      pickup_date: new Date().toLocaleDateString(),
+      pickup_time: new Date().toLocaleTimeString(),
+      delivery_speed: '—',
+      recipient_name: '—',
+      recipient_phone: '—',
+      total_price: 'Use this code to log into the Lightning Speed Couriers Driver App.',
+      notes: `Your temporary access code is: ${driver.temp_password}\n\nEnter this on the next screen to log in. You will then be prompted to create a permanent password.`
+    }, EMAILJS_PUBLIC_KEY);
+  } catch(e) {
+    console.warn('Email failed:', e);
+  }
+
+  currentDriverEmail = email;
+  document.getElementById('step-email').style.display = 'none';
+  document.getElementById('step-temppass').style.display = 'block';
+  btn.textContent = 'Send My Access Code →'; btn.disabled = false;
 }
 
-async function signInWithEmail() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  if (!email || !password) { showError('Please enter email and password'); return; }
+// ── STEP 2: Driver enters temp password → sign in ──
+async function signInWithTempPassword() {
+  const tempPass = document.getElementById('login-temppass').value.trim();
+  if (!tempPass) { showError2('Please enter your access code'); return; }
 
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) showError(error.message);
+  const btn = document.querySelector('#step-temppass .btn-login');
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: currentDriverEmail,
+    password: tempPass
+  });
+
+  btn.textContent = 'Sign In →'; btn.disabled = false;
+
+  if (error) {
+    showError2('❌ Incorrect access code. Check your email and try again.');
+    return;
+  }
+
+  // Check if password has been changed already
+  const { data: driver } = await sb
+    .from('drivers')
+    .select('password_changed, name')
+    .eq('email', currentDriverEmail)
+    .single();
+
+  if (driver && !driver.password_changed) {
+    // First login — prompt for new password
+    document.getElementById('step-temppass').style.display = 'none';
+    document.getElementById('step-newpass').style.display = 'block';
+  }
+  // If password already changed, onAuthStateChange will handle navigation
+}
+
+// ── STEP 3: Driver sets permanent password ──
+async function setNewPassword() {
+  const newPass = document.getElementById('new-password').value;
+  const confirmPass = document.getElementById('confirm-password').value;
+
+  if (!newPass || newPass.length < 6) { showError3('Password must be at least 6 characters'); return; }
+  if (newPass !== confirmPass) { showError3('Passwords do not match'); return; }
+
+  const btn = document.querySelector('#step-newpass .btn-login');
+  btn.textContent = 'Saving...'; btn.disabled = true;
+
+  // Update password in Supabase Auth
+  const { error } = await sb.auth.updateUser({ password: newPass });
+
+  if (error) {
+    showError3('Failed to update password: ' + error.message);
+    btn.textContent = 'Save Password & Enter App →'; btn.disabled = false;
+    return;
+  }
+
+  // Mark password as changed in drivers table
+  await sb.from('drivers')
+    .update({ password_changed: true, temp_password: null })
+    .eq('email', currentDriverEmail);
+
+  btn.textContent = 'Save Password & Enter App →'; btn.disabled = false;
+  // Auth state change will trigger showApp
 }
 
 function showError(msg) {
   const el = document.getElementById('login-error');
   el.textContent = msg; el.style.display = 'block';
 }
+function showError2(msg) {
+  const el = document.getElementById('login-error-2');
+  el.textContent = msg; el.style.display = 'block';
+}
+function showError3(msg) {
+  const el = document.getElementById('login-error-3');
+  el.textContent = msg; el.style.display = 'block';
+}
 
 async function signOut() {
   await sb.auth.signOut();
+  currentDriverEmail = '';
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('step-email').style.display = 'block';
+  document.getElementById('step-temppass').style.display = 'none';
+  document.getElementById('step-newpass').style.display = 'none';
 }
 
 async function checkAuth() {
   const { data: { session } } = await sb.auth.getSession();
-  if (session) showApp(session.user);
-
+  if (session) {
+    currentDriverEmail = session.user.email;
+    showApp(session.user);
+  }
   sb.auth.onAuthStateChange((event, session) => {
-    if (session) showApp(session.user);
-    else {
+    if (session) {
+      currentDriverEmail = session.user.email;
+      showApp(session.user);
+    } else {
       document.getElementById('app').style.display = 'none';
       document.getElementById('login-screen').style.display = 'flex';
     }
@@ -524,18 +642,26 @@ async function checkAuth() {
 }
 
 async function showApp(user) {
-  // ── Check if user is an approved driver ──
-  const { data, error } = await sb
+  const { data: driver, error } = await sb
     .from('drivers')
     .select('*')
     .eq('email', user.email)
     .eq('status', 'active')
     .single();
 
-  if (error || !data) {
+  if (error || !driver) {
     await sb.auth.signOut();
     document.getElementById('login-screen').style.display = 'flex';
-    showError('⛔ Access denied. You are not an approved driver. Please contact your administrator.');
+    showError('⛔ Access denied. Contact your administrator.');
+    return;
+  }
+
+  // If password not yet changed, show that step
+  if (!driver.password_changed) {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('step-email').style.display = 'none';
+    document.getElementById('step-temppass').style.display = 'none';
+    document.getElementById('step-newpass').style.display = 'block';
     return;
   }
 
@@ -543,17 +669,13 @@ async function showApp(user) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
 
-  const name = data.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Driver';
+  const name = driver.name || user.email?.split('@')[0] || 'Driver';
   document.getElementById('driver-badge').textContent = name.split(' ')[0];
   document.getElementById('profile-name').textContent = name;
   document.getElementById('profile-email').textContent = user.email || '';
 
   const avatar = document.getElementById('profile-avatar');
-  if (user.user_metadata?.avatar_url) {
-    avatar.innerHTML = `<img src="${user.user_metadata.avatar_url}" alt="avatar">`;
-  } else {
-    avatar.textContent = name[0].toUpperCase();
-  }
+  avatar.textContent = name[0].toUpperCase();
 
   loadDeliveries();
 }

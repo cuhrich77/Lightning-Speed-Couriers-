@@ -479,7 +479,7 @@ let currentDriverEmail = '';
 
 // ── EmailJS ──
 const EMAILJS_SERVICE_ID  = 'service_8nr1ewk';
-const EMAILJS_TEMPLATE_ID = 'template_v43zgh8';
+const EMAILJS_DRIVER_TEMPLATE_ID = 'template_hu3t7qj';
 const EMAILJS_PUBLIC_KEY  = 'UNEZC1I-LA3nE2pe3';
 
 // ── STEP 1: Driver enters email → look up temp password → email it ──
@@ -512,20 +512,10 @@ async function requestTempPassword() {
 
   // Send temp password via EmailJS
   try {
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      customer_name: driver.name,
-      customer_email: email,
-      booking_ref: 'Your Access Code',
-      pickup_address: driver.temp_password,
-      dropoff_address: '—',
-      delivery_type: 'Driver App Login',
-      pickup_date: new Date().toLocaleDateString(),
-      pickup_time: new Date().toLocaleTimeString(),
-      delivery_speed: '—',
-      recipient_name: '—',
-      recipient_phone: '—',
-      total_price: 'Use this code to log into the Lightning Speed Couriers Driver App.',
-      notes: `Your temporary access code is: ${driver.temp_password}\n\nEnter this on the next screen to log in. You will then be prompted to create a permanent password.`
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_DRIVER_TEMPLATE_ID, {
+      driver_name:   driver.name,
+      driver_email:  email,
+      temp_password: driver.temp_password
     }, EMAILJS_PUBLIC_KEY);
   } catch(e) {
     console.warn('Email failed:', e);

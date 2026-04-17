@@ -6,6 +6,7 @@
 <title>Admin Dashboard — Lightning Speed Couriers</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDoSc-yy9nk3Tcm2a-EqxfXpPUyDrp0I3k&libraries=places,geocoding"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -439,6 +440,9 @@
     <div class="nav-item active" onclick="showSection('bookings')">
       <span class="nav-icon">📋</span><span>Bookings</span>
     </div>
+    <div class="nav-item" onclick="showSection('dispatch')">
+      <span class="nav-icon">🚦</span><span>Dispatch</span>
+    </div>
     <div class="nav-item" onclick="showSection('earnings')">
       <span class="nav-icon">💰</span><span>Earnings</span>
     </div>
@@ -539,6 +543,39 @@
     </div>
 
     <!-- EARNINGS SECTION -->
+    <!-- DISPATCH SECTION -->
+    <div id="section-dispatch" style="display:none;">
+      <div class="topbar">
+        <div>
+          <div class="page-title">Dispatch</div>
+          <div class="page-sub">Auto-assign drivers to unassigned bookings based on availability</div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn-refresh" onclick="runAutoDispatch()">⚡ Auto Dispatch All</button>
+          <button class="btn-refresh" onclick="loadDispatch()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <!-- DRIVER STATUS GRID -->
+      <div style="margin-bottom:24px;">
+        <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:12px;font-weight:500;">Driver Availability</div>
+        <div id="dispatch-drivers" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+          <div class="loading"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- UNASSIGNED BOOKINGS -->
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Unassigned Bookings</div>
+          <div class="table-count" id="unassigned-count">—</div>
+        </div>
+        <div id="unassigned-list">
+          <div class="loading"><div class="spinner"></div>Loading...</div>
+        </div>
+      </div>
+    </div>
+
     <div id="section-earnings" style="display:none;">
       <div class="topbar">
         <div>
@@ -757,16 +794,20 @@ function renderTable(bookings) {
     document.getElementById('table-container').innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div>No bookings found</div>`;
     return;
   }
-  let html = `<table><thead><tr><th>Reference</th><th>Customer</th><th>Pickup</th><th>Dropoff</th><th>Type</th><th>Date</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody>`;
+  let html = `<table><thead><tr><th>Reference</th><th>Customer</th><th>Pickup</th><th>Dropoff</th><th>Type</th><th>Date</th><th>Total</th><th>Driver</th><th>Status</th><th>Action</th></tr></thead><tbody>`;
   bookings.forEach(b => {
+    const driverCell = b.assigned_driver_name
+      ? `<span style="color:var(--success);font-size:12px;">🚗 ${b.assigned_driver_name}</span>`
+      : `<button class="btn-view" onclick="manualDispatch('${b.id}')" style="font-size:11px;padding:4px 8px;">Assign</button>`;
     html += `<tr>
       <td><strong>${b.booking_ref || '—'}</strong></td>
       <td>${b.customer_name || '—'}</td>
-      <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.pickup_address || '—'}</td>
-      <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.dropoff_address || '—'}</td>
+      <td style="max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.pickup_address || '—'}</td>
+      <td style="max-width:100px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.dropoff_address || '—'}</td>
       <td>${b.delivery_type || '—'}</td>
       <td>${b.pickup_date || '—'}</td>
       <td>$${(b.total_price||0).toFixed(2)}</td>
+      <td>${driverCell}</td>
       <td>
         <select class="status-select" onchange="updateStatus('${b.id}', this.value)">
           ${['Confirmed','Picked Up','In Transit','Delivered','Cancelled'].map(s => `<option value="${s}" ${b.status === s ? 'selected' : ''}>${s}</option>`).join('')}
@@ -821,9 +862,11 @@ function showSection(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   event.currentTarget.classList.add('active');
   document.getElementById('section-bookings').style.display = name === 'bookings' ? 'block' : 'none';
+  document.getElementById('section-dispatch').style.display = name === 'dispatch' ? 'block' : 'none';
   document.getElementById('section-earnings').style.display = name === 'earnings' ? 'block' : 'none';
   document.getElementById('section-drivers').style.display = name === 'drivers' ? 'block' : 'none';
   if (name === 'drivers') loadDrivers();
+  if (name === 'dispatch') loadDispatch();
 }
 
 // ── PASSWORD HELPERS ──
@@ -989,6 +1032,312 @@ async function removeDriver(id, name) {
   if (error) { showToast('Failed to remove driver', 'error'); return; }
   showToast('Driver removed', 'success');
   loadDrivers();
+}
+
+// ── DISPATCH ──
+
+// Haversine formula — distance between two lat/lng points in miles
+function getDistanceMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Geocode an address using Google Maps
+async function geocodeAddress(address) {
+  return new Promise((resolve) => {
+    if (!window.google) { resolve(null); return; }
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address }, (results, status) => {
+      if (status === 'OK' && results[0]) {
+        resolve({
+          lat: results[0].geometry.location.lat(),
+          lng: results[0].geometry.location.lng()
+        });
+      } else { resolve(null); }
+    });
+  });
+}
+
+async function loadDispatch() {
+  // Load active drivers
+  const { data: drivers } = await sb.from('drivers').select('*').eq('status', 'active');
+  // Load active bookings with assignments
+  const { data: activeBookings } = await sb
+    .from('bookings')
+    .select('*')
+    .in('status', ['Confirmed', 'Picked Up', 'In Transit'])
+    .not('status', 'eq', 'Test');
+
+  const { data: unassigned } = await sb
+    .from('bookings')
+    .select('*')
+    .eq('status', 'Confirmed')
+    .is('assigned_driver_id', null)
+    .not('booking_ref', 'like', 'TEST%');
+
+  renderDispatchDrivers(drivers || [], activeBookings || []);
+  renderUnassigned(unassigned || []);
+}
+
+function renderDispatchDrivers(drivers, activeBookings) {
+  if (!drivers.length) {
+    document.getElementById('dispatch-drivers').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">🚗</div>No active drivers found.</div>`;
+    return;
+  }
+
+  let html = '';
+  drivers.forEach(d => {
+    const assigned = activeBookings.filter(b => b.assigned_driver_id === d.id);
+    const isOnline = d.is_online;
+    const statusColor = isOnline ? 'var(--success)' : 'var(--muted)';
+    const statusText = isOnline ? '🟢 Online' : '⚫ Offline';
+
+    html += `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-weight:600;font-size:14px;">${d.name || '—'}</div>
+        <div style="font-size:11px;color:${statusColor};">${statusText}</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${d.email}</div>
+      <div style="font-size:12px;color:${assigned.length > 0 ? 'var(--warning)' : 'var(--success)'};">
+        ${assigned.length > 0 ? `📦 ${assigned.length} active delivery` : '✅ Available'}
+      </div>
+      ${assigned.map(b => `
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;padding:6px 8px;background:var(--surface2);border-radius:4px;">
+          ${b.booking_ref} — ${b.status}
+        </div>`).join('')}
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button onclick="toggleDriverOnline('${d.id}', ${isOnline})"
+          style="flex:1;padding:6px;font-size:11px;border-radius:4px;border:1px solid var(--border);background:transparent;color:${isOnline ? 'var(--danger)' : 'var(--success)'};cursor:pointer;">
+          ${isOnline ? '⏸ Set Offline' : '▶ Set Online'}
+        </button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('dispatch-drivers').innerHTML = html;
+}
+
+function renderUnassigned(bookings) {
+  document.getElementById('unassigned-count').textContent = `${bookings.length} unassigned`;
+
+  if (!bookings.length) {
+    document.getElementById('unassigned-list').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">✅</div>All bookings are assigned!</div>`;
+    return;
+  }
+
+  let html = `<table><thead><tr>
+    <th>Reference</th><th>Customer</th><th>Pickup</th><th>Date & Time</th><th>Type</th><th>Action</th>
+  </tr></thead><tbody>`;
+
+  bookings.forEach(b => {
+    html += `<tr>
+      <td><strong>${b.booking_ref||'—'}</strong></td>
+      <td>${b.customer_name||'—'}</td>
+      <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.pickup_address||'—'}</td>
+      <td>${b.pickup_date||'—'} ${b.pickup_time||''}</td>
+      <td>${b.delivery_type||'—'}</td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn-view" onclick="autoDispatchOne('${b.id}')">⚡ Auto Assign</button>
+        <button class="btn-view" onclick="manualDispatch('${b.id}')">👤 Manual</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('unassigned-list').innerHTML = html;
+}
+
+// ── AUTO DISPATCH SINGLE BOOKING ──
+async function autoDispatchOne(bookingId) {
+  const booking = allBookings.find(b => b.id === bookingId) ||
+    (await sb.from('bookings').select('*').eq('id', bookingId).single()).data;
+  if (!booking) { showToast('Booking not found', 'error'); return; }
+
+  const result = await findBestDriver(booking);
+  if (!result) {
+    showToast('⚠️ No available drivers found for this booking', 'error');
+    return;
+  }
+
+  await assignDriver(bookingId, result.driver);
+  showToast(`✅ Assigned to ${result.driver.name}`, 'success');
+  loadDispatch();
+  loadBookings();
+}
+
+// ── AUTO DISPATCH ALL ──
+async function runAutoDispatch() {
+  const btn = document.querySelector('[onclick="runAutoDispatch()"]');
+  btn.textContent = '⚡ Dispatching...'; btn.disabled = true;
+
+  const { data: unassigned } = await sb
+    .from('bookings')
+    .select('*')
+    .eq('status', 'Confirmed')
+    .is('assigned_driver_id', null)
+    .not('booking_ref', 'like', 'TEST%');
+
+  if (!unassigned?.length) {
+    showToast('No unassigned bookings to dispatch', '');
+    btn.textContent = '⚡ Auto Dispatch All'; btn.disabled = false;
+    return;
+  }
+
+  let assigned = 0;
+  for (const booking of unassigned) {
+    const result = await findBestDriver(booking);
+    if (result) {
+      await assignDriver(booking.id, result.driver);
+      assigned++;
+    }
+  }
+
+  btn.textContent = '⚡ Auto Dispatch All'; btn.disabled = false;
+  showToast(`✅ Assigned ${assigned} of ${unassigned.length} bookings`, 'success');
+  loadDispatch();
+  loadBookings();
+}
+
+// ── FIND BEST DRIVER ──
+async function findBestDriver(booking) {
+  const { data: drivers } = await sb
+    .from('drivers')
+    .select('*')
+    .eq('status', 'active')
+    .eq('is_online', true);
+
+  if (!drivers?.length) return null;
+
+  // Get pickup coords
+  const pickupCoords = await geocodeAddress(booking.pickup_address);
+
+  // Get all active deliveries
+  const { data: activeDeliveries } = await sb
+    .from('bookings')
+    .select('*')
+    .in('status', ['Confirmed', 'Picked Up', 'In Transit'])
+    .not('assigned_driver_id', 'is', null);
+
+  const bookingDate = booking.pickup_date;
+  const bookingTime = booking.pickup_time;
+
+  let bestDriver = null;
+  let bestScore = Infinity;
+
+  for (const driver of drivers) {
+    // Get driver's active deliveries on same date
+    const driverDeliveries = (activeDeliveries || []).filter(d =>
+      d.assigned_driver_id === driver.id &&
+      d.pickup_date === bookingDate &&
+      d.id !== booking.id
+    );
+
+    // Check time conflict — if driver has delivery within 1 hour of this booking
+    let hasConflict = false;
+    for (const existing of driverDeliveries) {
+      if (existing.pickup_time && bookingTime) {
+        const existingMins = timeToMinutes(existing.pickup_time);
+        const newMins = timeToMinutes(bookingTime);
+        if (Math.abs(existingMins - newMins) < 60) {
+          // Check if locations are far apart (>10 miles)
+          if (pickupCoords) {
+            const existingCoords = await geocodeAddress(existing.pickup_address);
+            if (existingCoords) {
+              const dist = getDistanceMiles(pickupCoords.lat, pickupCoords.lng, existingCoords.lat, existingCoords.lng);
+              if (dist > 10) { hasConflict = true; break; }
+            }
+          }
+        }
+      }
+    }
+
+    if (hasConflict) continue;
+
+    // Score driver — fewer active deliveries = better
+    let score = driverDeliveries.length;
+
+    // Factor in distance if we have coords
+    if (pickupCoords && driver.last_lat && driver.last_lng) {
+      const dist = getDistanceMiles(pickupCoords.lat, pickupCoords.lng, driver.last_lat, driver.last_lng);
+      score += dist * 0.1;
+    }
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestDriver = driver;
+    }
+  }
+
+  return bestDriver ? { driver: bestDriver } : null;
+}
+
+function timeToMinutes(timeStr) {
+  if (!timeStr) return 0;
+  const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+  if (!match) return 0;
+  let hours = parseInt(match[1]);
+  const mins = parseInt(match[2]);
+  const period = match[3]?.toUpperCase();
+  if (period === 'PM' && hours !== 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + mins;
+}
+
+// ── ASSIGN DRIVER ──
+async function assignDriver(bookingId, driver) {
+  const { error } = await sb.from('bookings').update({
+    assigned_driver_id: driver.id,
+    assigned_driver_name: driver.name,
+    assigned_at: new Date().toISOString()
+  }).eq('id', bookingId);
+  if (error) console.error('Assign error:', error);
+}
+
+// ── MANUAL DISPATCH MODAL ──
+async function manualDispatch(bookingId) {
+  const { data: drivers } = await sb.from('drivers').select('*').eq('status', 'active');
+  if (!drivers?.length) { showToast('No active drivers available', 'error'); return; }
+
+  document.getElementById('modal-ref').textContent = '👤 Assign Driver';
+  document.getElementById('modal-body').innerHTML = `
+    <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Select a driver to assign this booking to:</p>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${drivers.map(d => `
+        <button onclick="assignAndClose('${bookingId}', '${d.id}', '${d.name}')"
+          style="padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);cursor:pointer;text-align:left;font-family:'DM Sans',sans-serif;font-size:14px;transition:all .2s;"
+          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          🚗 ${d.name} <span style="color:var(--muted);font-size:12px;">— ${d.email}</span>
+          ${d.is_online ? '<span style="color:var(--success);float:right;font-size:11px;">🟢 Online</span>' : '<span style="color:var(--muted);float:right;font-size:11px;">⚫ Offline</span>'}
+        </button>`).join('')}
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+async function assignAndClose(bookingId, driverId, driverName) {
+  closeModalDirect();
+  const { error } = await sb.from('bookings').update({
+    assigned_driver_id: driverId,
+    assigned_driver_name: driverName,
+    assigned_at: new Date().toISOString()
+  }).eq('id', bookingId);
+  if (error) { showToast('Failed to assign', 'error'); return; }
+  showToast(`✅ Assigned to ${driverName}`, 'success');
+  loadBookings();
+  loadDispatch();
+}
+
+// ── TOGGLE DRIVER ONLINE ──
+async function toggleDriverOnline(driverId, currentOnline) {
+  const { error } = await sb.from('drivers').update({ is_online: !currentOnline }).eq('id', driverId);
+  if (error) { showToast('Failed to update', 'error'); return; }
+  showToast(currentOnline ? '⚫ Driver set offline' : '🟢 Driver set online', 'success');
+  loadDispatch();
 }
 
 // ── TOAST ──
